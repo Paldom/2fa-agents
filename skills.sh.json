@@ -1,0 +1,16 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "Get a code",
+      "description": "Three ways your agent can produce a valid 2FA code on demand — offline from a seed you hold, over MCP from a server you run, or from the vault that already holds it.",
+      "skills": ["totp-generate", "totp-mcp-server", "totp-provider-api"]
+    },
+    {
+      "title": "Keep it safe, then use it",
+      "description": "Where the seed and the backup codes live so they never reach git, and how to spend a code on a real login without locking the account.",
+      "skills": ["totp-secret-store", "login-2fa-flow"]
+    }
+  ]
+}

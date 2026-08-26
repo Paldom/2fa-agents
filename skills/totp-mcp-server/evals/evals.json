@@ -1,0 +1,67 @@
+{
+  "skill": "totp-mcp-server",
+  "cases": [
+    { "type": "should_trigger", "prompt": "build me an MCP server that hands out 2FA codes" },
+    { "type": "should_trigger", "prompt": "I want to self-host a TOTP service my agents can call" },
+    { "type": "should_trigger", "prompt": "expose my authenticator as an MCP tool" },
+    { "type": "should_trigger", "prompt": "set up an mcp server for totp so cursor can log in" },
+    { "type": "should_trigger", "prompt": "how do I give my coding agent access to 2fa without pasting the seed into chat" },
+    { "type": "should_trigger", "prompt": "register a 2fa mcp server in .mcp.json" },
+    { "type": "should_trigger", "prompt": "my totp mcp server isn't showing any tools" },
+    { "type": "should_trigger", "prompt": "add an allowlist and audit log to the 2fa server" },
+    { "type": "should_trigger", "prompt": "self host 2fa mcp" },
+    { "type": "should_trigger", "prompt": "the otp mcp server dies immediately on startup" },
+
+    { "type": "should_not_trigger", "prompt": "what's my 2fa code for github" },
+    { "type": "should_not_trigger", "prompt": "where should I store the TOTP seed" },
+    { "type": "should_not_trigger", "prompt": "get the one-time password from 1Password" },
+    { "type": "should_not_trigger", "prompt": "my playwright login keeps failing at the 2fa prompt" },
+    { "type": "should_not_trigger", "prompt": "build an MCP server that queries our Postgres database" },
+    { "type": "should_not_trigger", "prompt": "add OAuth token validation to my MCP server" },
+    { "type": "should_not_trigger", "prompt": "what is the Model Context Protocol?" },
+    { "type": "should_not_trigger", "prompt": "install the playwright mcp server" },
+    { "type": "should_not_trigger", "prompt": "write a REST endpoint that verifies a user's TOTP code" },
+    { "type": "should_not_trigger", "prompt": "my github mcp server won't connect" },
+
+    {
+      "type": "quality",
+      "prompt": "set up a self-hosted MCP server so my agent can get 2FA codes without ever seeing the seed",
+      "expected_behavior": [
+        "uses the bundled server script with a pinned mcp SDK version rather than an unpinned npx or pip install",
+        "registers it as a stdio server with an absolute path in the client config",
+        "sets an account allowlist and confirms the audit log path",
+        "verifies the server by listing its tools and fetching one code before declaring it done"
+      ]
+    },
+    {
+      "type": "quality",
+      "prompt": "make sure this 2FA server can't be talked into leaking a secret",
+      "expected_behavior": [
+        "confirms there is no tool that stores, reads or exports a seed, and declines to add one",
+        "checks that the account argument is validated against the allowlist before any secret is read",
+        "confirms error messages and the audit log contain no secret and no generated code",
+        "states that a stdio server runs with the user's own privileges, so the boundary is against the model's context and not against the machine",
+        "acknowledges that the tool is a code oracle: an agent reading untrusted content can be induced to call it, and the allowlist, rate limit and audit log do not distinguish that call from a legitimate one",
+        "recommends keeping the code tool on manual approval rather than auto-approving it"
+      ]
+    },
+    {
+      "type": "quality",
+      "prompt": "can I run this over HTTP so my other laptop can use it too?",
+      "expected_behavior": [
+        "explains that switching from stdio to Streamable HTTP is a redeployment, not a flag, and adds an authentication requirement",
+        "insists on binding to localhost plus a tunnel, or real token auth, rather than exposing the port",
+        "points out that an unauthenticated remote 2FA endpoint hands out codes to anyone who can reach it"
+      ]
+    },
+    {
+      "type": "quality",
+      "prompt": "the server is registered but Claude Code shows no tools from it",
+      "expected_behavior": [
+        "checks that nothing is written to stdout by the server or its launcher, since that corrupts the protocol stream",
+        "checks that the client was restarted, because stdio tools are discovered at session start",
+        "checks the server's own trust or approval state in the client rather than editing the config repeatedly"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "skill": "totp-provider-api",
+  "cases": [
+    { "type": "should_trigger", "prompt": "get the 2FA code from 1Password" },
+    { "type": "should_trigger", "prompt": "how do I pull an OTP out of Bitwarden in a script" },
+    { "type": "should_trigger", "prompt": "our team shares a 2fa account — how should CI log in?" },
+    { "type": "should_trigger", "prompt": "op item get --otp just hangs in our pipeline" },
+    { "type": "should_trigger", "prompt": "set up vault's totp secrets engine as our authenticator" },
+    { "type": "should_trigger", "prompt": "does google authenticator have an API?" },
+    { "type": "should_trigger", "prompt": "fetch the one time password from our password manager" },
+    { "type": "should_trigger", "prompt": "bw get totp says more than one result was found" },
+    { "type": "should_trigger", "prompt": "which 2fa provider has the best api support" },
+    { "type": "should_trigger", "prompt": "self-hosted 2fauth otp endpoint" },
+
+    { "type": "should_not_trigger", "prompt": "what's my 2fa code for github" },
+    { "type": "should_not_trigger", "prompt": "where should I store the TOTP seed on this machine" },
+    { "type": "should_not_trigger", "prompt": "build an MCP server that serves 2FA codes" },
+    { "type": "should_not_trigger", "prompt": "my playwright login fails at the two-factor prompt" },
+    { "type": "should_not_trigger", "prompt": "store this API key in 1Password" },
+    { "type": "should_not_trigger", "prompt": "how do I sign into 1Password on my laptop" },
+    { "type": "should_not_trigger", "prompt": "verify our users' TOTP codes in the backend with Twilio Verify" },
+    { "type": "should_not_trigger", "prompt": "rotate our Vault root token" },
+    { "type": "should_not_trigger", "prompt": "send an SMS one-time passcode to a customer" },
+    { "type": "should_not_trigger", "prompt": "compare password managers for our team" },
+
+    {
+      "type": "quality",
+      "prompt": "our CI job needs the GitHub 2FA code out of 1Password",
+      "expected_behavior": [
+        "uses a service account token from the environment rather than an interactive sign-in",
+        "notes that a service account cannot reach Private vaults and needs a dedicated vault",
+        "never prints the token, and keeps the code out of build logs",
+        "checks the credential is present before invoking the CLI so the job fails fast instead of hanging"
+      ]
+    },
+    {
+      "type": "quality",
+      "prompt": "which 2FA provider should we use so our automation can fetch codes over an API?",
+      "expected_behavior": [
+        "states plainly that Google Authenticator has no API and only exports via a reverse-engineered migration QR",
+        "compares at least 1Password, Bitwarden, Vault's TOTP engine and 2FAuth on how a code is actually retrieved",
+        "distinguishes fetching your own codes from Twilio Verify, which verifies your end users' codes",
+        "makes a recommendation tied to the user's constraint rather than listing options"
+      ]
+    },
+    {
+      "type": "quality",
+      "prompt": "op item get --otp works on my laptop but hangs forever in the pipeline",
+      "expected_behavior": [
+        "identifies that op falls back to an interactive unlock when no service account token is set",
+        "does not suggest simply adding a longer timeout as the fix",
+        "shows the non-interactive credential setup and a precondition check that fails fast"
+      ]
+    },
+    {
+      "type": "quality",
+      "prompt": "we want HashiCorp Vault to be the authenticator for our service accounts",
+      "expected_behavior": [
+        "enables the TOTP secrets engine and creates a key from the issuer's otpauth URL rather than inventing a seed",
+        "reads codes from the code endpoint and scopes a policy so only the intended role can read it",
+        "points out that Vault audits every code request, which a local seed file cannot"
+      ]
+    }
+  ]
+}

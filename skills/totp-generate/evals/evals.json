@@ -1,0 +1,73 @@
+{
+  "skill": "totp-generate",
+  "cases": [
+    { "type": "should_trigger", "prompt": "what's my 2fa code for github" },
+    { "type": "should_trigger", "prompt": "generate a TOTP code from this secret" },
+    { "type": "should_trigger", "prompt": "give me the otp" },
+    { "type": "should_trigger", "prompt": "i need the 6 digit code from my authenticator app" },
+    { "type": "should_trigger", "prompt": "totp code plz" },
+    { "type": "should_trigger", "prompt": "Please produce a current one-time password using the shared secret stored in ~/.config/totp/npm.txt" },
+    { "type": "should_trigger", "prompt": "here's an otpauth:// URI — what's the code right now?" },
+    { "type": "should_trigger", "prompt": "npm publish is asking for an OTP, get me one" },
+    { "type": "should_trigger", "prompt": "my authenticator codes keep getting rejected, is my clock off?" },
+    { "type": "should_trigger", "prompt": "how many seconds do I have left on this code" },
+
+    { "type": "should_not_trigger", "prompt": "where should I keep my TOTP secret so it never lands in git?" },
+    { "type": "should_not_trigger", "prompt": "save these 8 backup codes somewhere safe" },
+    { "type": "should_not_trigger", "prompt": "get the 2FA code out of 1Password for me" },
+    { "type": "should_not_trigger", "prompt": "bw get totp keeps saying more than one result was found" },
+    { "type": "should_not_trigger", "prompt": "build me an MCP server that hands out 2FA codes to Cursor" },
+    { "type": "should_not_trigger", "prompt": "my playwright login test keeps failing at the two-factor step" },
+    { "type": "should_not_trigger", "prompt": "add TOTP verification to our Django login so users can enable 2FA" },
+    { "type": "should_not_trigger", "prompt": "send an SMS one-time passcode with Twilio Verify" },
+    { "type": "should_not_trigger", "prompt": "explain how HMAC-SHA256 works" },
+    { "type": "should_not_trigger", "prompt": "scan this QR code and tell me what URL it points to" },
+
+    {
+      "type": "quality",
+      "prompt": "what's my 2FA code for GitHub? the secret is in ~/.config/totp/github.txt",
+      "expected_behavior": [
+        "runs the bundled totp.py with --file rather than reading the secret and passing it as an argument",
+        "prints only the 6-digit code, never the secret, and reports how long the code is valid",
+        "does not write the code or the secret into any file in the repository"
+      ]
+    },
+    {
+      "type": "quality",
+      "prompt": "generate a code for otpauth://totp/Acme:bo?secret=JBSWY3DPEHPK3PXP&digits=8&period=60&algorithm=SHA256",
+      "expected_behavior": [
+        "honours digits=8, period=60 and algorithm=SHA256 from the URI instead of assuming 6/30/SHA1",
+        "returns an 8-character numeric code",
+        "does not silently fall back to defaults when the URI carries explicit parameters"
+      ]
+    },
+    {
+      "type": "quality",
+      "prompt": "the TOTP codes this script generates are always rejected by the server",
+      "expected_behavior": [
+        "checks host clock drift first (totp.py --check-clock) instead of assuming the secret is wrong",
+        "runs totp.py --selftest to prove the implementation matches the RFC 6238 vectors",
+        "then compares digits, period and algorithm against what the issuer expects",
+        "does not suggest resubmitting the same code"
+      ]
+    },
+    {
+      "type": "quality",
+      "prompt": "give me a code I can paste into this login form",
+      "expected_behavior": [
+        "uses --min-validity so a code about to expire is not handed over",
+        "states the remaining validity alongside the code",
+        "warns that the code is single-use and must not be resubmitted if rejected"
+      ]
+    },
+    {
+      "type": "quality",
+      "prompt": "my totp secret is JBSWY3DPEHPK3PXP, what's the code",
+      "expected_behavior": [
+        "returns the code",
+        "flags that a secret pasted on a command line is exposed in ps output and shell history",
+        "offers the file, stdin or environment-variable path for next time instead of repeating the argument form"
+      ]
+    }
+  ]
+}

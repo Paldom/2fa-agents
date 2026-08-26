@@ -1,0 +1,84 @@
+{
+  "skill": "totp-secret-store",
+  "cases": [
+    { "type": "should_trigger", "prompt": "where should I keep my TOTP secret so it never lands in git?" },
+    { "type": "should_trigger", "prompt": "save these 8 backup codes somewhere safe" },
+    { "type": "should_trigger", "prompt": "i just enabled 2fa and got a qr code, where do I put the seed" },
+    { "type": "should_trigger", "prompt": "how do I stop committing my authenticator secret" },
+    { "type": "should_trigger", "prompt": "store this otpauth uri in the mac keychain pls" },
+    { "type": "should_trigger", "prompt": "did I leak a 2FA secret anywhere in this repo?" },
+    { "type": "should_trigger", "prompt": "set up a gitignored place for my recovery codes" },
+    { "type": "should_trigger", "prompt": "I need to rotate the TOTP seed for this service" },
+    { "type": "should_trigger", "prompt": ".local is in my .gitignore but the seed still shows up in git status" },
+    { "type": "should_trigger", "prompt": "which of my accounts do I have 2fa seeds saved for" },
+
+    { "type": "should_not_trigger", "prompt": "what's my 2fa code for github" },
+    { "type": "should_not_trigger", "prompt": "generate a TOTP from this shared secret" },
+    { "type": "should_not_trigger", "prompt": "get the one-time password out of 1Password" },
+    { "type": "should_not_trigger", "prompt": "build an MCP server that serves 2FA codes" },
+    { "type": "should_not_trigger", "prompt": "my playwright login fails at the two-factor step" },
+    { "type": "should_not_trigger", "prompt": "store this API key in the macOS keychain" },
+    { "type": "should_not_trigger", "prompt": "add .env to my gitignore" },
+    { "type": "should_not_trigger", "prompt": "scan the repo for hardcoded AWS access keys" },
+    { "type": "should_not_trigger", "prompt": "explain how the macOS keychain encrypts things" },
+    { "type": "should_not_trigger", "prompt": "reset my github password" },
+
+    {
+      "type": "quality",
+      "prompt": "I just turned on 2FA for GitHub and have the otpauth:// URI — set it up so my agent can use it",
+      "expected_behavior": [
+        "pipes the URI into secret_store.py set over stdin rather than passing it as a command argument",
+        "never echoes the secret or the URI back to the user or into a file",
+        "verifies the round trip by piping the stored value into the generator and showing only the resulting code",
+        "states that a seed stored beside the password reduces the account to single-factor for the agent"
+      ]
+    },
+    {
+      "type": "quality",
+      "prompt": "here are my 10 GitHub backup codes, put them somewhere safe",
+      "expected_behavior": [
+        "stores them under a separate service namespace from the TOTP seed",
+        "explains that codes are single-use and shows the --pop form that removes a code as it is handed out",
+        "warns that backup codes are password-equivalent and bypass 2FA entirely",
+        "does not leave the codes in the chat transcript or write them into a repository file"
+      ]
+    },
+    {
+      "type": "quality",
+      "prompt": "what's actually stored under my github entry? show me",
+      "expected_behavior": [
+        "uses the describe action rather than printing the stored secret",
+        "reports the issuer, digits, period, algorithm and secret length without the secret itself",
+        "explains that a leaked seed is permanent while a leaked code lasts seconds, so get belongs only on the left of a pipe"
+      ]
+    },
+    {
+      "type": "quality",
+      "prompt": "check whether I've leaked any 2FA secrets in this repo",
+      "expected_behavior": [
+        "runs scan_leaks.py rather than improvising a grep",
+        "distinguishes files that are gitignored from files git already tracks, and explains that .gitignore does not apply to tracked files",
+        "tells the user that any secret that reached a commit must be rotated at the issuer, not just deleted"
+      ]
+    },
+    {
+      "type": "quality",
+      "prompt": "just stick the seed in a .env file in the project, it's fine",
+      "expected_behavior": [
+        "does what was asked rather than refusing",
+        "states plainly where that sits in the ranking against the OS keychain and a file outside the repo",
+        "confirms with git check-ignore that the path is actually ignored and is not already tracked",
+        "sets the file to mode 600 and the directory to 700"
+      ]
+    },
+    {
+      "type": "quality",
+      "prompt": "our GitHub Actions job needs the TOTP secret to log in",
+      "expected_behavior": [
+        "recommends a dedicated machine or service account with its own seed rather than the human's personal seed",
+        "uses the CI provider's encrypted secret store and does not write the seed into the workflow file",
+        "warns that anything printed in a CI step can land in build logs and artifacts"
+      ]
+    }
+  ]
+}
