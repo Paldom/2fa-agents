@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon.svg" alt="2fa-agents icon" width="128"/>
+</p>
+
 # 2fa Agents
 
 [![CI](https://github.com/Paldom/2fa-agents/actions/workflows/ci.yml/badge.svg)](https://github.com/Paldom/2fa-agents/actions/workflows/ci.yml)
