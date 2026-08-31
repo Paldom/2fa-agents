@@ -45,6 +45,7 @@ from collections import deque
 from pathlib import Path
 
 from mcp.server import MCPServer
+
 # The SDK's ToolError is the *only* exception whose message reaches the model. Any
 # other exception is treated as a crash: the client gets "Error executing tool X"
 # and every recovery hint you wrote is dropped into a stderr traceback.
@@ -53,8 +54,9 @@ from mcp.server.mcpserver.exceptions import ToolError
 SERVICE = os.environ.get("TOTP_MCP_SERVICE", "totp")
 SECRET_DIR = Path(os.environ.get("TOTP_MCP_DIR", Path.home() / ".config" / "totp" / SERVICE))
 ALLOWLIST = {a.strip() for a in os.environ.get("TOTP_MCP_ACCOUNTS", "").split(",") if a.strip()}
-AUDIT_PATH = Path(os.environ.get(
-    "TOTP_MCP_AUDIT", Path.home() / ".local" / "state" / "totp-mcp" / "audit.log"))
+AUDIT_PATH = Path(
+    os.environ.get("TOTP_MCP_AUDIT", Path.home() / ".local" / "state" / "totp-mcp" / "audit.log")
+)
 RATE_PER_MINUTE = int(os.environ.get("TOTP_MCP_RATE", "10"))
 ALGORITHMS = {"SHA1": hashlib.sha1, "SHA256": hashlib.sha256, "SHA512": hashlib.sha512}
 STEAM_ALPHABET = "23456789BCDFGHJKMNPQRTVWXY"
@@ -78,10 +80,17 @@ def audit(event: str, account: str, detail: str = "") -> None:
     try:
         AUDIT_PATH.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         with open(AUDIT_PATH, "a", encoding="utf-8") as handle:
-            handle.write(json.dumps({
-                "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-                "event": event, "account": account, "detail": detail,
-            }) + "\n")
+            handle.write(
+                json.dumps(
+                    {
+                        "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                        "event": event,
+                        "account": account,
+                        "detail": detail,
+                    }
+                )
+                + "\n"
+            )
     except OSError as exc:
         print(f"totp-mcp: audit write failed: {exc}", file=sys.stderr)
 
@@ -96,13 +105,18 @@ def rate_limit(account: str) -> None:
         raise ToolError(
             f"rate limit reached for {account} ({RATE_PER_MINUTE}/minute). A code is only "
             "valid for one 30-second window, so repeated requests cannot help; wait for the "
-            "next window instead of retrying.")
+            "next window instead of retrying."
+        )
     window.append(now)
 
 
 def stored_accounts() -> list[str]:
     if backend() == "file":
-        names = sorted(p.name for p in SECRET_DIR.iterdir() if p.is_file()) if SECRET_DIR.is_dir() else []
+        names = (
+            sorted(p.name for p in SECRET_DIR.iterdir() if p.is_file())
+            if SECRET_DIR.is_dir()
+            else []
+        )
     elif sys.platform == "darwin":
         proc = subprocess.run(["security", "dump-keychain"], capture_output=True, text=True)
         names = []
@@ -117,11 +131,16 @@ def stored_accounts() -> list[str]:
                 names.append(attrs["acct"])
         names = sorted(set(names))
     else:
-        proc = subprocess.run(["secret-tool", "search", "--all", "service", SERVICE],
-                              capture_output=True, text=True)
-        names = sorted({line.split("=", 1)[1].strip()
-                        for line in (proc.stdout + proc.stderr).splitlines()
-                        if line.strip().startswith("attribute.account =")})
+        proc = subprocess.run(
+            ["secret-tool", "search", "--all", "service", SERVICE], capture_output=True, text=True
+        )
+        names = sorted(
+            {
+                line.split("=", 1)[1].strip()
+                for line in (proc.stdout + proc.stderr).splitlines()
+                if line.strip().startswith("attribute.account =")
+            }
+        )
     return [n for n in names if not ALLOWLIST or n in ALLOWLIST]
 
 
@@ -133,18 +152,31 @@ def load_secret(account: str) -> str:
             raise ToolError(f"no stored secret for {account!r}")
         return path.read_text(encoding="utf-8").strip()
     if sys.platform == "darwin":
-        proc = subprocess.run(["security", "find-generic-password", "-w", "-a", account,
-                               "-s", SERVICE], capture_output=True, text=True)
+        proc = subprocess.run(
+            ["security", "find-generic-password", "-w", "-a", account, "-s", SERVICE],
+            capture_output=True,
+            text=True,
+        )
     else:
-        proc = subprocess.run(["secret-tool", "lookup", "service", SERVICE, "account", account],
-                              capture_output=True, text=True)
+        proc = subprocess.run(
+            ["secret-tool", "lookup", "service", SERVICE, "account", account],
+            capture_output=True,
+            text=True,
+        )
     if proc.returncode != 0 or not proc.stdout.strip():
         raise ToolError(f"no stored secret for {account!r}")
     return proc.stdout.strip()
 
 
 def parse(secret: str) -> dict:
-    params = {"secret": secret, "digits": 6, "period": 30, "algorithm": "SHA1", "issuer": "", "encoder": ""}
+    params = {
+        "secret": secret,
+        "digits": 6,
+        "period": 30,
+        "algorithm": "SHA1",
+        "issuer": "",
+        "encoder": "",
+    }
     if not secret.lower().startswith("otpauth"):
         return params
     parts = urllib.parse.urlsplit(secret)
@@ -155,10 +187,12 @@ def parse(secret: str) -> dict:
     if not get("secret", ""):
         raise ToolError("stored otpauth URI has no secret parameter")
     return {
-        "secret": get("secret", ""), "digits": int(get("digits", "6")),
+        "secret": get("secret", ""),
+        "digits": int(get("digits", "6")),
         "period": int(get("period", "30")),
         "algorithm": get("algorithm", "SHA1").upper().replace("-", ""),
-        "issuer": get("issuer", ""), "encoder": get("encoder", "").lower(),
+        "issuer": get("issuer", ""),
+        "encoder": get("encoder", "").lower(),
     }
 
 
@@ -173,7 +207,7 @@ def totp(params: dict, at: float) -> str:
     counter = int(at // params["period"])
     digest = hmac.new(key, struct.pack(">Q", counter), ALGORITHMS[params["algorithm"]]).digest()
     offset = digest[-1] & 0x0F
-    value = struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF
+    value = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
     if params["encoder"] == "steam" or params["issuer"].lower() == "steam":
         out = ""
         for _ in range(5):
@@ -187,9 +221,9 @@ mcp = MCPServer(
     name="totp",
     version="1.0.0",
     instructions="Provides current two-factor authentication codes for accounts the "
-                 "operator has enrolled on this machine. Codes are single-use and expire "
-                 "within seconds; request one only when a login prompt is actually asking "
-                 "for it, and never resubmit a code that was rejected.",
+    "operator has enrolled on this machine. Codes are single-use and expire "
+    "within seconds; request one only when a login prompt is actually asking "
+    "for it, and never resubmit a code that was rejected.",
 )
 
 
@@ -214,7 +248,8 @@ def get_totp_code(account: str) -> dict:
         audit("denied", account, "not enrolled or not allowlisted")
         raise ToolError(
             f"{account!r} is not available. Call list_totp_accounts() for the exact names. "
-            "Enrolling a new account is a human action and cannot be done through this server.")
+            "Enrolling a new account is a human action and cannot be done through this server."
+        )
     rate_limit(account)
     params = parse(load_secret(account))
     now = time.time()
@@ -225,6 +260,9 @@ def get_totp_code(account: str) -> dict:
 
 
 if __name__ == "__main__":
-    print(f"totp-mcp: backend={backend()} service={SERVICE} "
-          f"accounts={len(stored_accounts())} audit={AUDIT_PATH}", file=sys.stderr)
+    print(
+        f"totp-mcp: backend={backend()} service={SERVICE} "
+        f"accounts={len(stored_accounts())} audit={AUDIT_PATH}",
+        file=sys.stderr,
+    )
     mcp.run("stdio")

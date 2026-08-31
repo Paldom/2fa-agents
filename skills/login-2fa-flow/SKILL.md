@@ -1,6 +1,6 @@
 ---
 name: login-2fa-flow
-description: Drives the two-factor challenge step of an automated login the user controls - reusing a saved session first, submitting a fresh code inside its window, and stopping before lockout. Use when browser or CLI automation hits a 6-digit code prompt, an MFA step blocks a script, or 2FA logins are flaky in CI. Not for generating or storing codes, or building 2FA into your own app.
+description: Drives the two-factor challenge step of an automated login the user controls - reusing a saved session first, submitting a fresh code inside its window, and stopping before lockout. Use when browser or CLI automation hits a 6-digit code prompt, a submitted code comes back invalid or expired, an MFA step blocks a script, or 2FA logins are flaky in CI. Not for generating or storing codes, or building 2FA into your own app.
 license: MIT
 ---
 

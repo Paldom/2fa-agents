@@ -53,8 +53,10 @@ def decode_secret(secret: str) -> bytes:
     try:
         key = base64.b32decode(padded, casefold=True)
     except (binascii.Error, ValueError):
-        die(f"secret is not valid base32 ({len(cleaned)} chars after cleanup); "
-            "check for 0/O and 1/L transcription errors")
+        die(
+            f"secret is not valid base32 ({len(cleaned)} chars after cleanup); "
+            "check for 0/O and 1/L transcription errors"
+        )
     if not key:
         die("secret decoded to zero bytes")
     return key
@@ -91,18 +93,25 @@ def hotp(key: bytes, counter: int, digits: int, algorithm: str, steam: bool = Fa
     """RFC 4226 dynamic truncation, shared by TOTP (counter = time step)."""
     digest = hmac.new(key, struct.pack(">Q", counter), ALGORITHMS[algorithm]).digest()
     offset = digest[-1] & 0x0F
-    value = struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF
+    value = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
     if steam:
         out = ""
         for _ in range(5):
             out += STEAM_ALPHABET[value % len(STEAM_ALPHABET)]
             value //= len(STEAM_ALPHABET)
         return out
-    return str(value % 10 ** digits).zfill(digits)
+    return str(value % 10**digits).zfill(digits)
 
 
-def generate(secret: str, at: float, digits: int = 6, period: int = 30,
-             algorithm: str = "SHA1", t0: int = 0, steam: bool = False) -> str:
+def generate(
+    secret: str,
+    at: float,
+    digits: int = 6,
+    period: int = 30,
+    algorithm: str = "SHA1",
+    t0: int = 0,
+    steam: bool = False,
+) -> str:
     if algorithm not in ALGORITHMS:
         die(f"unsupported algorithm {algorithm!r} (SHA1, SHA256, SHA512)")
     if period <= 0:
@@ -117,7 +126,8 @@ def read_secret(args: argparse.Namespace) -> str:
         return sys.stdin.read().strip()
     if args.file:
         try:
-            text = open(os.path.expanduser(args.file), encoding="utf-8").read()
+            with open(os.path.expanduser(args.file), encoding="utf-8") as fh:
+                text = fh.read()
         except OSError as exc:
             die(f"cannot read secret file: {exc}")
         # A secret file may hold comments; take the first non-comment, non-blank line.
@@ -146,10 +156,10 @@ def check_clock(url: str, period: int) -> int:
     import email.utils
     import urllib.request
 
-    request = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "totp-check-clock"})
+    request = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "totp-check-clock"})  # noqa: S310 - fixed http(s) endpoint, not a caller-supplied scheme
     before = time.time()
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with urllib.request.urlopen(request, timeout=10) as response:  # noqa: S310 - fixed http(s) endpoint, not a caller-supplied scheme
             header = response.headers.get("Date")
     except OSError as exc:
         die(f"clock check could not reach {url}: {exc}")
@@ -159,12 +169,17 @@ def check_clock(url: str, period: int) -> int:
     remote = email.utils.parsedate_to_datetime(header).timestamp()
     offset = (before + after) / 2 - remote
     tolerance = period / 3
-    print(f"local clock is {offset:+.1f}s vs {url} (tolerance +/-{tolerance:.0f}s, "
-          f"round-trip {after - before:.2f}s)")
+    print(
+        f"local clock is {offset:+.1f}s vs {url} (tolerance +/-{tolerance:.0f}s, "
+        f"round-trip {after - before:.2f}s)"
+    )
     if abs(offset) > tolerance:
-        print(f"totp: error: clock drift {offset:+.1f}s will produce rejected codes; "
-              "sync the host clock (macOS: `sudo sntp -sS time.apple.com`; "
-              "Linux: `sudo chronyc makestep` or enable systemd-timesyncd)", file=sys.stderr)
+        print(
+            f"totp: error: clock drift {offset:+.1f}s will produce rejected codes; "
+            "sync the host clock (macOS: `sudo sntp -sS time.apple.com`; "
+            "Linux: `sudo chronyc makestep` or enable systemd-timesyncd)",
+            file=sys.stderr,
+        )
         return 4
     return 0
 
@@ -187,7 +202,7 @@ def selftest() -> int:
     ]
     failures = 0
     for t, *expected in vectors:
-        for algorithm, want in zip(("SHA1", "SHA256", "SHA512"), expected):
+        for algorithm, want in zip(("SHA1", "SHA256", "SHA512"), expected, strict=False):
             got = generate(seeds[algorithm], t, digits=8, algorithm=algorithm)
             if got != want:
                 failures += 1
@@ -205,24 +220,61 @@ def selftest() -> int:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     src = p.add_mutually_exclusive_group()
-    src.add_argument("secret", nargs="?", help="base32 secret or otpauth:// URI (visible in `ps` — prefer --file)")
+    src.add_argument(
+        "secret",
+        nargs="?",
+        help="base32 secret or otpauth:// URI (visible in `ps` — prefer --file)",
+    )
     src.add_argument("--file", help="read the secret (base32 or otpauth:// URI) from this file")
     src.add_argument("--stdin", action="store_true", help="read the secret from stdin")
-    p.add_argument("--env", default="TOTP_SECRET", help="environment variable holding the secret (default: TOTP_SECRET)")
-    p.add_argument("--digits", type=int, help="override digit count (default 6, or the URI's digits=)")
-    p.add_argument("--period", type=int, help="override time step in seconds (default 30, or the URI's period=)")
-    p.add_argument("--algorithm", help="override SHA1|SHA256|SHA512 (default SHA1, or the URI's algorithm=)")
-    p.add_argument("--at", type=float, help="generate for this Unix timestamp instead of now (testing)")
-    p.add_argument("--min-validity", type=int, default=0, metavar="SECS",
-                   help="if the current code expires in under SECS, wait for the next window (use before submitting a form)")
-    p.add_argument("--window", type=int, default=0, metavar="N",
-                   help="also print the N previous and next codes (drift diagnosis only — never submit these)")
-    p.add_argument("--json", action="store_true", help="emit {code, expires_in, period, ...} as JSON")
+    p.add_argument(
+        "--env",
+        default="TOTP_SECRET",
+        help="environment variable holding the secret (default: TOTP_SECRET)",
+    )
+    p.add_argument(
+        "--digits", type=int, help="override digit count (default 6, or the URI's digits=)"
+    )
+    p.add_argument(
+        "--period",
+        type=int,
+        help="override time step in seconds (default 30, or the URI's period=)",
+    )
+    p.add_argument(
+        "--algorithm", help="override SHA1|SHA256|SHA512 (default SHA1, or the URI's algorithm=)"
+    )
+    p.add_argument(
+        "--at", type=float, help="generate for this Unix timestamp instead of now (testing)"
+    )
+    p.add_argument(
+        "--min-validity",
+        type=int,
+        default=0,
+        metavar="SECS",
+        help="if the current code expires in under SECS, wait for the next window (use before submitting a form)",
+    )
+    p.add_argument(
+        "--window",
+        type=int,
+        default=0,
+        metavar="N",
+        help="also print the N previous and next codes (drift diagnosis only — never submit these)",
+    )
+    p.add_argument(
+        "--json", action="store_true", help="emit {code, expires_in, period, ...} as JSON"
+    )
     p.add_argument("--selftest", action="store_true", help="run RFC 6238 test vectors and exit")
-    p.add_argument("--check-clock", nargs="?", const="https://www.cloudflare.com", metavar="URL",
-                   help="compare the local clock against an HTTPS Date header and exit (exit 4 on drift)")
+    p.add_argument(
+        "--check-clock",
+        nargs="?",
+        const="https://www.cloudflare.com",
+        metavar="URL",
+        help="compare the local clock against an HTTPS Date header and exit (exit 4 on drift)",
+    )
     args = p.parse_args()
 
     if args.selftest:
@@ -231,8 +283,15 @@ def main() -> int:
         return check_clock(args.check_clock, args.period or 30)
 
     raw = read_secret(args)
-    params = {"secret": raw, "label": "", "issuer": "", "digits": 6, "period": 30,
-              "algorithm": "SHA1", "encoder": ""}
+    params = {
+        "secret": raw,
+        "label": "",
+        "issuer": "",
+        "digits": 6,
+        "period": 30,
+        "algorithm": "SHA1",
+        "encoder": "",
+    }
     if raw.lower().startswith("otpauth"):
         params = parse_otpauth(raw)
     for key in ("digits", "period", "algorithm"):
@@ -246,29 +305,52 @@ def main() -> int:
     expires_in = period - (now % period)
     if args.min_validity and args.at is None and expires_in < args.min_validity:
         if args.min_validity >= period:
-            die(f"--min-validity {args.min_validity} >= period {period}: no window is ever that fresh")
+            die(
+                f"--min-validity {args.min_validity} >= period {period}: no window is ever that fresh"
+            )
         time.sleep(expires_in + 0.05)
         now = time.time()
         expires_in = period - (now % period)
 
-    code = generate(params["secret"], now, params["digits"], period, params["algorithm"], steam=steam)
+    code = generate(
+        params["secret"], now, params["digits"], period, params["algorithm"], steam=steam
+    )
 
     if args.json:
-        out = {"code": code, "expires_in": round(expires_in, 1), "period": period,
-               "digits": params["digits"], "algorithm": params["algorithm"]}
+        out = {
+            "code": code,
+            "expires_in": round(expires_in, 1),
+            "period": period,
+            "digits": params["digits"],
+            "algorithm": params["algorithm"],
+        }
         if params["issuer"]:
             out["issuer"] = params["issuer"]
         if params["label"]:
             out["label"] = params["label"]
         if args.window:
-            out["window"] = [generate(params["secret"], now + i * period, params["digits"],
-                                      period, params["algorithm"], steam=steam)
-                             for i in range(-args.window, args.window + 1)]
+            out["window"] = [
+                generate(
+                    params["secret"],
+                    now + i * period,
+                    params["digits"],
+                    period,
+                    params["algorithm"],
+                    steam=steam,
+                )
+                for i in range(-args.window, args.window + 1)
+            ]
         print(json.dumps(out))
     elif args.window:
         for i in range(-args.window, args.window + 1):
-            offset = generate(params["secret"], now + i * period, params["digits"], period,
-                              params["algorithm"], steam=steam)
+            offset = generate(
+                params["secret"],
+                now + i * period,
+                params["digits"],
+                period,
+                params["algorithm"],
+                steam=steam,
+            )
             print(f"{i:+d} {offset}" if i else f" 0 {offset}  <- current, {expires_in:.0f}s left")
     else:
         print(code)

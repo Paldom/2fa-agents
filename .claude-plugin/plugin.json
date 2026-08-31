@@ -1,7 +1,7 @@
 {
   "name": "2fa-agents",
   "description": "Agent Skills for two-factor authentication in agent workflows: RFC 6238 TOTP code generation, secret storage and retrieval, and driving the 2FA step of automated logins.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "Paldom",
     "url": "https://github.com/Paldom"

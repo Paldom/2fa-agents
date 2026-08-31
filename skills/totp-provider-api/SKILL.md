@@ -1,6 +1,6 @@
 ---
 name: totp-provider-api
-description: Fetches 2FA codes from a managed provider's API or CLI - 1Password, Bitwarden, HashiCorp Vault's TOTP engine, 2FAuth - so the seed never lands on this machine. Use when the user wants an OTP from a password manager or team-shared 2FA, or asks whether Google Authenticator or another provider has a usable API. Not for local seed files, keychain storage, or offline code generation.
+description: Fetches 2FA codes from a managed provider's API or CLI - 1Password (op), Bitwarden (bw), Vault's TOTP engine, 2FAuth - so the seed never lands on this machine. Use for an OTP from a password manager or team-shared 2FA, when such a CLI returns an ambiguous item or more than one result, or when asking whether a provider has a usable API. Not for local seed files or offline generation.
 license: MIT
 ---
 

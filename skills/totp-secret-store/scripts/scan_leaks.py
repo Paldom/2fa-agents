@@ -17,7 +17,6 @@ Exit codes: 0 clean, 1 findings, 2 usage error.
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import subprocess
 import sys
@@ -27,26 +26,32 @@ from pathlib import Path
 # scheme appears constantly in documentation, regexes and prose, and flagging that
 # trains people to ignore the scanner.
 HARD = [
-    (re.compile(r"otpauth://(?:totp|hotp)/\S*[?&]secret=([A-Za-z2-7=]{8,})", re.I),
-     "otpauth:// URI carrying a shared secret"),
-    (re.compile(r"otpauth-migration://offline\?data=([A-Za-z0-9%+/=]{16,})", re.I),
-     "Google Authenticator export blob (contains every secret)"),
+    (
+        re.compile(r"otpauth://(?:totp|hotp)/\S*[?&]secret=([A-Za-z2-7=]{8,})", re.I),
+        "otpauth:// URI carrying a shared secret",
+    ),
+    (
+        re.compile(r"otpauth-migration://offline\?data=([A-Za-z0-9%+/=]{16,})", re.I),
+        "Google Authenticator export blob (contains every secret)",
+    ),
 ]
 SUPPRESS = re.compile(r"scan-leaks:\s*ignore")
 # A bare base32 blob is only a finding when the line also names a 2FA concept;
 # base32-shaped strings are otherwise everywhere (hashes, IDs, tokens).
 CONTEXT = re.compile(
     r"(totp|otp[_\- ]?secret|2fa|mfa|authenticator|shared[_\- ]?secret|recovery[_\- ]?code|backup[_\- ]?code)",
-    re.I)
+    re.I,
+)
 BASE32 = re.compile(r"\b[A-Z2-7]{16,}={0,6}\b")
 # Placeholder secrets that appear in every tutorial; flagging them is noise.
 KNOWN_EXAMPLES = {
-    "JBSWY3DPEHPK3PXP",                  # "Hello!\xde\xad\xbe\xef"
+    "JBSWY3DPEHPK3PXP",  # "Hello!\xde\xad\xbe\xef"
     "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",  # RFC 6238 SHA-1 seed
     "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
 }
 SUSPECT_NAMES = re.compile(
-    r"(backup|recovery)[-_.]?codes?|\.otpauth$|(^|/)totp[-_.].*\.(txt|json|env)$", re.I)
+    r"(backup|recovery)[-_.]?codes?|\.otpauth$|(^|/)totp[-_.].*\.(txt|json|env)$", re.I
+)
 BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".gz", ".webp", ".ico"}
 
 findings: list[str] = []
@@ -82,8 +87,10 @@ def detect(line: str) -> list[str]:
     if CONTEXT.search(line):
         for match in BASE32.findall(line):
             if match.rstrip("=") not in KNOWN_EXAMPLES:
-                reasons.append(f"base32 blob on a line naming 2FA ({len(match)} chars, "
-                               f"starts {match[:4]}…) — likely a shared secret")
+                reasons.append(
+                    f"base32 blob on a line naming 2FA ({len(match)} chars, "
+                    f"starts {match[:4]}…) — likely a shared secret"
+                )
     return reasons
 
 
@@ -125,13 +132,22 @@ def selftest() -> int:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--selftest", action="store_true", help="check the detection rules and exit")
     p.add_argument("--root", type=Path, default=Path.cwd(), help="repository root (default: cwd)")
-    p.add_argument("--protect", nargs="*", default=[".local"],
-                   help="paths that must be gitignored and untracked (default: .local)")
-    p.add_argument("--all", action="store_true",
-                   help="also scan untracked files that are not ignored (one `git add .` from a leak)")
+    p.add_argument(
+        "--protect",
+        nargs="*",
+        default=[".local"],
+        help="paths that must be gitignored and untracked (default: .local)",
+    )
+    p.add_argument(
+        "--all",
+        action="store_true",
+        help="also scan untracked files that are not ignored (one `git add .` from a leak)",
+    )
     args = p.parse_args()
 
     if args.selftest:
@@ -149,8 +165,13 @@ def main() -> int:
             findings.append(f"{rel}: tracked file whose name says it holds 2FA secrets")
 
     if args.all:
-        others = [f for f in git(root, "ls-files", "-z", "--others",
-                                 "--exclude-standard").stdout.split("\0") if f]
+        others = [
+            f
+            for f in git(root, "ls-files", "-z", "--others", "--exclude-standard").stdout.split(
+                "\0"
+            )
+            if f
+        ]
         for rel in others:
             before = len(findings)
             scan_file(root, rel)
@@ -165,21 +186,31 @@ def main() -> int:
         # be ignored?" — with a probe path. Testing the directory itself is unreliable:
         # `.local/*` does not match `.local/`, and without --no-index git skips paths
         # already in the index, so a correctly-ignored dir can report as unignored.
-        ignored = git(root, "check-ignore", "-q", "--no-index",
-                      f"{protected.rstrip('/')}/__scan_leaks_probe__").returncode == 0
+        ignored = (
+            git(
+                root,
+                "check-ignore",
+                "-q",
+                "--no-index",
+                f"{protected.rstrip('/')}/__scan_leaks_probe__",
+            ).returncode
+            == 0
+        )
         inside = [f for f in tracked if f == protected or f.startswith(protected.rstrip("/") + "/")]
         # A path un-ignored by an explicit negation (the `dir/*` + `!dir/README.md`
         # idiom) is tracked on purpose. Its *content* is still scanned above, so
         # skipping it here drops a false positive without dropping coverage.
-        inside = [f for f in inside
-                  if git(root, "check-ignore", "-q", "--no-index", f).returncode == 0]
+        inside = [
+            f for f in inside if git(root, "check-ignore", "-q", "--no-index", f).returncode == 0
+        ]
         if not ignored:
             findings.append(f"{protected}/: exists but is NOT gitignored — add it to .gitignore")
         if inside:
             findings.append(
                 f"{protected}/: {len(inside)} file(s) already TRACKED by git "
                 f"(e.g. {inside[0]}) — .gitignore does not apply to tracked files; "
-                f"run: git rm --cached -r {protected} && rotate every secret in it")
+                f"run: git rm --cached -r {protected} && rotate every secret in it"
+            )
         # A 700 directory gates traversal, so file modes inside it cannot be reached
         # by another user. Checking the directory is both the correct control and one
         # check instead of N noisy ones. POSIX only: Windows maps NTFS ACLs onto these
@@ -187,19 +218,26 @@ def main() -> int:
         if sys.platform == "win32":
             pass
         elif target.is_dir() and target.stat().st_mode & 0o077:
-            findings.append(f"{protected}/: mode {target.stat().st_mode & 0o777:o} — "
-                            f"any local user can read it; run: chmod 700 {protected}")
+            findings.append(
+                f"{protected}/: mode {target.stat().st_mode & 0o777:o} — "
+                f"any local user can read it; run: chmod 700 {protected}"
+            )
 
     if findings:
         print(f"scan-leaks: {len(findings)} finding(s)", file=sys.stderr)
         for finding in findings:
             print(f"  {finding}", file=sys.stderr)
-        print("\nAny secret that reached a commit must be rotated at the issuer — "
-              "removing the file does not un-publish it.", file=sys.stderr)
+        print(
+            "\nAny secret that reached a commit must be rotated at the issuer — "
+            "removing the file does not un-publish it.",
+            file=sys.stderr,
+        )
         return 1
     scope = "tracked + untracked" if args.all else "tracked"
-    print(f"scan-leaks: clean ({len(tracked)} {scope} file(s) scanned, "
-          f"protected: {', '.join(args.protect) or 'none'})")
+    print(
+        f"scan-leaks: clean ({len(tracked)} {scope} file(s) scanned, "
+        f"protected: {', '.join(args.protect) or 'none'})"
+    )
     return 0
 
 

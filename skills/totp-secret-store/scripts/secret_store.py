@@ -94,9 +94,23 @@ def detect_backend() -> str:
 # Feeding it twice on stdin is the only non-interactive path that keeps the secret
 # out of argv.
 
+
 def macos_set(service: str, account: str, secret: str) -> None:
-    proc = run(["security", "add-generic-password", "-U", "-a", account, "-s", service,
-                "-l", f"{service}: {account}", "-w"], stdin=f"{secret}\n{secret}\n")
+    proc = run(
+        [
+            "security",
+            "add-generic-password",
+            "-U",
+            "-a",
+            account,
+            "-s",
+            service,
+            "-l",
+            f"{service}: {account}",
+            "-w",
+        ],
+        stdin=f"{secret}\n{secret}\n",
+    )
     if proc.returncode != 0:
         die(f"keychain write failed: {proc.stderr.strip()}", 4)
 
@@ -133,9 +147,21 @@ def macos_delete(service: str, account: str) -> None:
 
 # --- libsecret ---------------------------------------------------------------
 
+
 def libsecret_set(service: str, account: str, secret: str) -> None:
-    proc = run(["secret-tool", "store", "--label", f"{service}: {account}",
-                "service", service, "account", account], stdin=secret)
+    proc = run(
+        [
+            "secret-tool",
+            "store",
+            "--label",
+            f"{service}: {account}",
+            "service",
+            service,
+            "account",
+            account,
+        ],
+        stdin=secret,
+    )
     if proc.returncode != 0:
         die(f"secret-tool store failed: {proc.stderr.strip()}", 4)
 
@@ -149,9 +175,13 @@ def libsecret_get(service: str, account: str) -> str:
 
 def libsecret_list(service: str) -> list[str]:
     proc = run(["secret-tool", "search", "--all", "service", service])
-    return sorted({line.split("=", 1)[1].strip()
-                   for line in proc.stderr.splitlines() + proc.stdout.splitlines()
-                   if line.strip().startswith("attribute.account =")})
+    return sorted(
+        {
+            line.split("=", 1)[1].strip()
+            for line in proc.stderr.splitlines() + proc.stdout.splitlines()
+            if line.strip().startswith("attribute.account =")
+        }
+    )
 
 
 def libsecret_delete(service: str, account: str) -> None:
@@ -174,16 +204,25 @@ PS_DELETE = "Remove-Secret -Name $env:SS_NAME -Vault $env:SS_VAULT -ErrorAction 
 
 def windows_run(script: str, service: str, account: str = "", stdin: str | None = None) -> str:
     env = {**os.environ, "SS_VAULT": service, "SS_NAME": account}
-    proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
-                          input=stdin, capture_output=True, text=True, env=env)
+    proc = subprocess.run(
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+        input=stdin,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
     if proc.returncode != 0:
-        die(f"PowerShell SecretManagement failed: {proc.stderr.strip()}\n"
+        die(
+            f"PowerShell SecretManagement failed: {proc.stderr.strip()}\n"
             "Install once with: Install-Module Microsoft.PowerShell.SecretManagement, "
-            "Microsoft.PowerShell.SecretStore", 4)
+            "Microsoft.PowerShell.SecretStore",
+            4,
+        )
     return proc.stdout.rstrip("\n")
 
 
 # --- file fallback -----------------------------------------------------------
+
 
 def file_path(service: str, account: str) -> Path:
     return FILE_ROOT / service / account
@@ -232,17 +271,22 @@ def file_delete(service: str, account: str) -> None:
 
 # --- dispatch ----------------------------------------------------------------
 
+
 def store_set(backend: str, service: str, account: str, secret: str) -> None:
     if backend == "windows":
         windows_run(PS_SET, service, account, secret)
         return
-    {"macos": macos_set, "libsecret": libsecret_set, "file": file_set}[backend](service, account, secret)
+    {"macos": macos_set, "libsecret": libsecret_set, "file": file_set}[backend](
+        service, account, secret
+    )
 
 
 def store_get(backend: str, service: str, account: str) -> str:
     if backend == "windows":
         return windows_run(PS_GET, service, account)
-    return {"macos": macos_get, "libsecret": libsecret_get, "file": file_get}[backend](service, account)
+    return {"macos": macos_get, "libsecret": libsecret_get, "file": file_get}[backend](
+        service, account
+    )
 
 
 def store_list(backend: str, service: str) -> list[str]:
@@ -255,7 +299,9 @@ def store_delete(backend: str, service: str, account: str) -> None:
     if backend == "windows":
         windows_run(PS_DELETE, service, account)
         return
-    {"macos": macos_delete, "libsecret": libsecret_delete, "file": file_delete}[backend](service, account)
+    {"macos": macos_delete, "libsecret": libsecret_delete, "file": file_delete}[backend](
+        service, account
+    )
 
 
 def describe(stored: str) -> str:
@@ -275,11 +321,15 @@ def describe(stored: str) -> str:
         query = urllib.parse.parse_qs(parts.query)
         get = lambda k, d: (query.get(k) or [d])[0]  # noqa: E731
         secret = get("secret", "")
-        return (f"otpauth {parts.netloc} URI; label={urllib.parse.unquote(parts.path.lstrip('/'))!r} "
-                f"issuer={get('issuer', '')!r} digits={get('digits', '6')} "
-                f"period={get('period', '30')} algorithm={get('algorithm', 'SHA1')} "
-                f"secret={len(secret)} base32 chars")
-    return f"bare secret, {len(value)} chars, {'valid' if _is_base32(value) else 'NOT valid'} base32"
+        return (
+            f"otpauth {parts.netloc} URI; label={urllib.parse.unquote(parts.path.lstrip('/'))!r} "
+            f"issuer={get('issuer', '')!r} digits={get('digits', '6')} "
+            f"period={get('period', '30')} algorithm={get('algorithm', 'SHA1')} "
+            f"secret={len(secret)} base32 chars"
+        )
+    return (
+        f"bare secret, {len(value)} chars, {'valid' if _is_base32(value) else 'NOT valid'} base32"
+    )
 
 
 def _is_base32(value: str) -> bool:
@@ -292,8 +342,11 @@ def selftest() -> int:
     cases = [
         # (input, stored, values-after-split)
         ("JBSWY3DPEHPK3PXP", "JBSWY3DPEHPK3PXP", ["JBSWY3DPEHPK3PXP"]),
-        ("otpauth://totp/A:b?secret=JBSW", "otpauth://totp/A:b?secret=JBSW",
-         ["otpauth://totp/A:b?secret=JBSW"]),
+        (
+            "otpauth://totp/A:b?secret=JBSW",
+            "otpauth://totp/A:b?secret=JBSW",
+            ["otpauth://totp/A:b?secret=JBSW"],
+        ),
         ("  spaced-seed  \n", "spaced-seed", ["spaced-seed"]),
         # Backup codes printed WITH internal spaces must stay ONE code each.
         ("1234 5678\nabcd efgh\n", "1234 5678|abcd efgh", ["1234 5678", "abcd efgh"]),
@@ -305,8 +358,11 @@ def selftest() -> int:
         got_values = split_values(got_stored)
         if got_stored != want_stored or got_values != want_values:
             failures += 1
-            print(f"FAIL {raw!r}: stored={got_stored!r} (want {want_stored!r}), "
-                  f"values={got_values} (want {want_values})", file=sys.stderr)
+            print(
+                f"FAIL {raw!r}: stored={got_stored!r} (want {want_stored!r}), "
+                f"values={got_values} (want {want_values})",
+                file=sys.stderr,
+            )
     # A single-line value must survive verbatim, or the documented
     # `... | totp.py --stdin` pipe breaks.
     if normalize("JBSWY3DPEHPK3PXP") != "JBSWY3DPEHPK3PXP":
@@ -320,18 +376,34 @@ def selftest() -> int:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("action", choices=("set", "get", "describe", "list", "delete", "backends", "selftest"))
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "action", choices=("set", "get", "describe", "list", "delete", "backends", "selftest")
+    )
     p.add_argument("account", nargs="?", help="account name, e.g. github")
-    p.add_argument("--service", default=DEFAULT_SERVICE,
-                   help=f"namespace within the keychain (default: {DEFAULT_SERVICE}; "
-                        "use totp-backup for recovery codes)")
-    p.add_argument("--backend", choices=("macos", "libsecret", "windows", "file"),
-                   help="force a backend instead of auto-detecting")
-    p.add_argument("--force", action="store_true",
-                   help="get: allow printing a secret to a terminal (it will be in scrollback)")
-    p.add_argument("--pop", action="store_true",
-                   help="get: print the first line and write the rest back (burns one backup code)")
+    p.add_argument(
+        "--service",
+        default=DEFAULT_SERVICE,
+        help=f"namespace within the keychain (default: {DEFAULT_SERVICE}; "
+        "use totp-backup for recovery codes)",
+    )
+    p.add_argument(
+        "--backend",
+        choices=("macos", "libsecret", "windows", "file"),
+        help="force a backend instead of auto-detecting",
+    )
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="get: allow printing a secret to a terminal (it will be in scrollback)",
+    )
+    p.add_argument(
+        "--pop",
+        action="store_true",
+        help="get: print the first line and write the rest back (burns one backup code)",
+    )
     args = p.parse_args()
 
     if args.action == "selftest":
@@ -341,12 +413,16 @@ def main() -> int:
 
     if args.action == "backends":
         print(f"selected: {backend}")
-        for name, available in (("macos", sys.platform == "darwin" and bool(shutil.which("security"))),
-                                ("libsecret", bool(shutil.which("secret-tool"))),
-                                ("windows", sys.platform == "win32" and bool(shutil.which("powershell"))),
-                                ("file", True)):
-            print(f"  {name:<10} {'available' if available else 'unavailable'}"
-                  f"{'   <- ' + str(FILE_ROOT) if name == 'file' else ''}")
+        for name, available in (
+            ("macos", sys.platform == "darwin" and bool(shutil.which("security"))),
+            ("libsecret", bool(shutil.which("secret-tool"))),
+            ("windows", sys.platform == "win32" and bool(shutil.which("powershell"))),
+            ("file", True),
+        ):
+            print(
+                f"  {name:<10} {'available' if available else 'unavailable'}"
+                f"{'   <- ' + str(FILE_ROOT) if name == 'file' else ''}"
+            )
         return 0
 
     if args.action == "list":
@@ -359,8 +435,10 @@ def main() -> int:
 
     if args.action == "set":
         if sys.stdin.isatty():
-            die("refusing to read a secret from a terminal; pipe it in: "
-                f"printf '%s' \"$SEED\" | {Path(sys.argv[0]).name} set {args.account}")
+            die(
+                "refusing to read a secret from a terminal; pipe it in: "
+                f"printf '%s' \"$SEED\" | {Path(sys.argv[0]).name} set {args.account}"
+            )
         secret = normalize(sys.stdin.read())
         if not secret:
             die("stdin was empty")
@@ -375,9 +453,11 @@ def main() -> int:
     if args.action == "get":
         value = store_get(backend, args.service, args.account)
         if sys.stdout.isatty() and not args.pop and not args.force:
-            die("refusing to print a secret to a terminal. Use it on the left of a pipe "
+            die(
+                "refusing to print a secret to a terminal. Use it on the left of a pipe "
                 f"(`... get {args.account} | totp.py --stdin`), run `describe {args.account}` "
-                "to inspect it safely, or pass --force if you really mean it.")
+                "to inspect it safely, or pass --force if you really mean it."
+            )
         if not args.pop:
             # A list prints one per line; a single value prints verbatim so it can be
             # piped straight into a generator.

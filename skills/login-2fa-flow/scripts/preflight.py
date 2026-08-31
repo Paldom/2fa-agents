@@ -52,11 +52,19 @@ def mask(code: str) -> str:
 def fetch(command: str, timeout: int) -> tuple[str, float]:
     started = time.monotonic()
     try:
-        proc = subprocess.run(shlex.split(command), capture_output=True, text=True,
-                              timeout=timeout, stdin=subprocess.DEVNULL)
+        proc = subprocess.run(
+            shlex.split(command),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            stdin=subprocess.DEVNULL,
+        )
     except subprocess.TimeoutExpired:
-        die(f"code command did not finish within {timeout}s — it is probably waiting for an "
-            "interactive unlock, which never completes in an automated run", 3)
+        die(
+            f"code command did not finish within {timeout}s — it is probably waiting for an "
+            "interactive unlock, which never completes in an automated run",
+            3,
+        )
     except (FileNotFoundError, ValueError) as exc:
         die(f"cannot run code command: {exc}", 3)
     elapsed = time.monotonic() - started
@@ -71,22 +79,29 @@ def fetch(command: str, timeout: int) -> tuple[str, float]:
     # at the login form where it costs an attempt.
     codes = [line for line in lines if CODE_RE.match(line)]
     if len(lines) == 1 and not codes:
-        die(f"output is not code-shaped: {lines[0][:40]!r}. Expected 6-10 digits (or a "
+        die(
+            f"output is not code-shaped: {lines[0][:40]!r}. Expected 6-10 digits (or a "
             "5-character Steam code). A long base32 string means the SEED was fetched "
-            "instead of a code — 1Password needs '?attribute=otp'.", 5)
+            "instead of a code — 1Password needs '?attribute=otp'.",
+            5,
+        )
     if len(lines) > 1 or len(codes) != 1:
-        die(f"stdout must contain the code and nothing else; got {len(lines)} line(s): "
+        die(
+            f"stdout must contain the code and nothing else; got {len(lines)} line(s): "
             f"{' / '.join(lines)[:120]!r}. Route diagnostics to stderr, or wrap the "
-            "command so only the code reaches stdout.", 5)
+            "command so only the code reaches stdout.",
+            5,
+        )
     return codes[0], elapsed
 
 
 def check_clock(period: int) -> None:
-    request = urllib.request.Request("https://www.cloudflare.com", method="HEAD",
-                                     headers={"User-Agent": "totp-preflight"})
+    request = urllib.request.Request(
+        "https://www.cloudflare.com", method="HEAD", headers={"User-Agent": "totp-preflight"}
+    )
     before = time.time()
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with urllib.request.urlopen(request, timeout=10) as response:  # noqa: S310 - fixed http(s) endpoint, not a caller-supplied scheme
             header = response.headers.get("Date")
     except OSError as exc:
         print(f"preflight: WARN: clock check skipped, network unreachable ({exc})", file=sys.stderr)
@@ -97,16 +112,24 @@ def check_clock(period: int) -> None:
         return
     offset = (before + after) / 2 - email.utils.parsedate_to_datetime(header).timestamp()
     if abs(offset) > period / 3:
-        die(f"host clock is {offset:+.1f}s off network time — every code will be rejected. "
+        die(
+            f"host clock is {offset:+.1f}s off network time — every code will be rejected. "
             "Sync the clock (macOS: `sudo sntp -sS time.apple.com`; Linux: "
-            "`sudo chronyc makestep`) before attempting the login", 4)
+            "`sudo chronyc makestep`) before attempting the login",
+            4,
+        )
     print(f"  clock       {offset:+.1f}s vs network time (ok)")
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--code-command", required=True,
-                   help="shell command that prints one code to stdout and exits 0")
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--code-command",
+        required=True,
+        help="shell command that prints one code to stdout and exits 0",
+    )
     p.add_argument("--period", type=int, default=30, help="TOTP window in seconds (default 30)")
     p.add_argument("--timeout", type=int, default=20, help="per-invocation timeout (default 20s)")
     p.add_argument("--skip-clock", action="store_true", help="do not check network time")
@@ -116,12 +139,15 @@ def main() -> int:
         die(f"--period must be positive, got {args.period}", 2)
 
     if DESTRUCTIVE_RE.search(args.code_command):
-        die("that command consumes a single-use code each time it runs, so it is not a "
+        die(
+            "that command consumes a single-use code each time it runs, so it is not a "
             "code command. Preflight runs the command twice and a retry runs it again — "
             "checking it would destroy several backup codes and still fail, because two "
             "backup codes are never equal. Backup codes are a deliberate one-shot "
             "fallback a human chooses, not an automated code source: preflight the TOTP "
-            "source instead.", 2)
+            "source instead.",
+            2,
+        )
 
     # Start inside a fresh window so the two probes cannot straddle a boundary and
     # report a false "non-deterministic" failure.
@@ -136,8 +162,11 @@ def main() -> int:
     # a code with half a second left. Providers that compute the code remotely cannot
     # sleep for you, so the caller must ask for a fresh window.
     if residual < 5:
-        print(f"  WARNING: that code had {residual:.1f}s left. Pass --min-validity 5 to the "
-              "code command so a dying code is never handed to a form.", file=sys.stderr)
+        print(
+            f"  WARNING: that code had {residual:.1f}s left. Pass --min-validity 5 to the "
+            "code command so a dying code is never handed to a form.",
+            file=sys.stderr,
+        )
 
     # Compare only if both probes landed in the SAME time step; a window that rolls
     # between them legitimately yields two different codes.
@@ -147,15 +176,21 @@ def main() -> int:
     if step_first != step_second:
         print("  determinism skipped (the window rolled between probes)")
     elif second != first:
-        die("two runs inside one time step returned different codes — the command is not a "
-            "deterministic TOTP source", 6)
+        die(
+            "two runs inside one time step returned different codes — the command is not a "
+            "deterministic TOTP source",
+            6,
+        )
     else:
         print("  determinism ok, stable within one window")
 
     budget = args.period / 3
     if elapsed > budget:
-        die(f"code command takes {elapsed:.1f}s, over the {budget:.0f}s budget for a "
-            f"{args.period}s window — the code can expire before the form is submitted", 7)
+        die(
+            f"code command takes {elapsed:.1f}s, over the {budget:.0f}s budget for a "
+            f"{args.period}s window — the code can expire before the form is submitted",
+            7,
+        )
     print(f"  latency     {elapsed:.2f}s of a {args.period}s window (ok)")
 
     if not args.skip_clock:
